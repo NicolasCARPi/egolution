@@ -2,6 +2,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
 	"time"
@@ -14,7 +15,7 @@ var genome string
 const rad = 20
 
 // number of iterations
-const iter = 500000
+const defaultIter = 500000
 
 // possible letters in the genome
 const letters = " abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!?:,;"
@@ -24,11 +25,15 @@ const badLetters = "kqwxyz"
 const genomeSize = 800
 
 func main() {
+	iter := flag.Int("i", defaultIter, "Number of iterations to run")
+	quiet := flag.Bool("q", false, "Suppress output")
+	flag.Parse()
+
 	rand.Seed(time.Now().UTC().UnixNano())
 	genome := getLetters(genomeSize)
 	score := getScore(genome)
 	fmt.Printf("[Time 0] %s (%2.2f)\n", genome, score)
-	for i := 0; i < iter; i++ {
+	for i := 0; i < *iter; i++ {
 		virus := getLetters(rad)
 		mutated := mutate(genome, virus)
 		tryScore := getScore(mutated)
@@ -37,15 +42,19 @@ func main() {
 			// keep this mutation
 			genome = mutated
 			score = tryScore
-			fmt.Print("+")
+			if !*quiet {
+				fmt.Print("+")
+			}
 		}
 
-		if i%25 == 0 {
-			fmt.Print(".")
+		if !*quiet {
+			if i%25 == 0 {
+				fmt.Print(".")
+			}
 		}
 
 	}
-	fmt.Printf("\n[Time %d] %s (%2.1f)\n", iter, genome, score)
+	fmt.Printf("\n[Time %d] %s (%2.1f)\n", *iter, genome, score)
 }
 
 func getLetters(n int) string {
