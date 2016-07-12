@@ -12,7 +12,7 @@ import (
 var genome string
 
 // radiation level
-const rad = 20
+const rad = 2
 
 // number of iterations
 const defaultIter = 500000
@@ -22,7 +22,7 @@ const letters = " abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
 
 const badLetters = "kqwxyz"
 
-const genomeSize = 800
+const genomeSize = 45
 
 func main() {
 	iter := flag.Int("i", defaultIter, "Number of iterations to run")
@@ -32,10 +32,9 @@ func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
 	genome := getLetters(genomeSize)
 	score := getScore(genome)
-	fmt.Printf("[Time 0] %s (%2.2f)\n", genome, score)
+	firstLine := fmt.Sprintf("0\t%s\t%2.2f\t%d\n", genome[:20], score, len(genome))
 	for i := 0; i < *iter; i++ {
-		virus := getLetters(rad)
-		mutated := mutate(genome, virus)
+		mutated := mutate(genome)
 		tryScore := getScore(mutated)
 
 		if tryScore > score {
@@ -54,7 +53,12 @@ func main() {
 		}
 
 	}
-	fmt.Printf("\n[Time %d] %s (%2.1f)\n", *iter, genome, score)
+	if !*quiet {
+		fmt.Print("\n")
+	}
+	fmt.Printf("Time\tGenome\tScore\tLength\n")
+	fmt.Println(firstLine)
+	fmt.Printf("%d\t%s\t%2.1f\t%d\n", *iter, genome[:20], score, len(genome))
 }
 
 func getLetters(n int) string {
@@ -65,34 +69,61 @@ func getLetters(n int) string {
 	return string(b)
 }
 
-func mutate(genome string, virus string) string {
-	b := []rune(genome)
-	v := []rune(virus)
-	insertPos := randInt(0, len(genome)-len(virus))
-	for i := 0; i < rad; i++ {
-		b[insertPos+i] = v[i]
+// a mutation can be infect, add or loss
+func mutate(genome string) string {
+	dice := randInt(0, 100)
+
+	if dice%15 == 0 {
+		return loss(genome)
+
+	} else if dice%10 == 0 {
+		return add(genome)
+
+	} else {
+		return infect(genome)
 	}
-	return string(b)
+}
+
+// add a virus of length rad to the genome
+func infect(genome string) string {
+	g := []rune(genome)
+	v := []rune(getLetters(rad))
+	insertPos := randInt(0, len(genome)-len(v))
+	for i := 0; i < rad; i++ {
+		g[insertPos+i] = v[i]
+	}
+	return string(g)
+}
+
+// add a single nucleotide
+func add(genome string) string {
+	return genome + getLetters(1)
+}
+
+// remove a single nucleotide
+func loss(genome string) string {
+	g := []rune(genome)
+	deletePos := randInt(0, len(genome)-1)
+	full := append(g[:deletePos], g[deletePos+1:]...)
+	return string(full)
 }
 
 func getScore(genome string) float64 {
-	bad := 0.0
-	good := 0.0
-	r := []rune(genome)
+	bad := 1.0
+	good := 1.0
+	g := []rune(genome)
 
 	// walk the genome
 	for i := 0; i < len(genome); i++ {
 
 		// count the space
-		if unicode.IsSpace(r[i]) {
-			good += 1
+		if unicode.IsSpace(g[i]) {
+			good += 0.1
 		}
-		// numbers are not wanted
-		if unicode.IsNumber(r[i]) {
-			bad += 1
-		}
-		// we don't want punctuation or uppercase
-		if unicode.In(r[i], unicode.Punct) || unicode.In(r[i], unicode.Upper) {
+		// we don't want punctuation, numbers or uppercase
+		if unicode.In(g[i], unicode.Punct) ||
+			unicode.In(g[i], unicode.Upper) ||
+			unicode.IsNumber(g[i]) {
 			bad += 1
 		}
 		// ideal number of space is every 5 letters
@@ -102,7 +133,7 @@ func getScore(genome string) float64 {
 		}
 
 	}
-	return (good / (bad + 1)) / genomeSize * 100000
+	return ((good / bad) / genomeSize) * 100
 }
 
 func randInt(min int, max int) int {
