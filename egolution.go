@@ -8,8 +8,7 @@ import (
 	"time"
 )
 
-// radiation level
-const rad = 3
+var verbose *bool
 
 // number of iterations
 const defaultIter = 50000
@@ -17,49 +16,43 @@ const defaultIter = 50000
 // possible azoted bases in the genome, we work with RNA here
 const bases = "AUGC"
 
-// list of amino acids
-const aa = "ARNDCEQGHILKMFPSTWYV"
-
 // size in aminoacids
 const genomeSize = 10
 
 func main() {
+
+	// parse arguments
 	iter := flag.Int("i", defaultIter, "Number of iterations to run")
-	quiet := flag.Bool("q", false, "Suppress output")
+	verbose = flag.Bool("v", false, "Enable output")
 	flag.Parse()
 
+	// init random
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	// create our base genome
 	genome := getLetters(genomeSize * 3)
-	score := getScore(genome)
-	firstLine := fmt.Sprintf("0\t%s\t%2.2f\t%d\n", genome, score, len(genome))
+	score := len(translateGenome(genome))
+	firstLine := fmt.Sprintf("0\t%d\t%d\n", score, len(genome))
 	for i := 0; i < *iter; i++ {
 		mutated := mutate(genome)
-		tryScore := getScore(translateGenome(mutated))
+		tryScore := len(translateGenome(mutated))
 
+		// evolution step
 		if tryScore > score {
 			// keep this mutation
 			genome = mutated
 			score = tryScore
-			if !*quiet {
-				fmt.Print("+")
+			if *verbose {
+				fmt.Println("✓", score)
 			}
 		}
-
-		if !*quiet {
-			if i%25 == 0 {
-				fmt.Print(".")
-			}
-		}
-
 	}
-	if !*quiet {
+	if *verbose {
 		fmt.Print("\n")
 	}
-	fmt.Printf("Time\tGenome\tScore\tLength\n")
+	fmt.Printf("Time\tProt size\tGenome size\n")
 	fmt.Println(firstLine)
-	fmt.Printf("%d\t%s\t%2.1f\t%d\n", *iter, genome, score, len(genome))
+	fmt.Printf("%d\t%d\t%d\n", *iter, score, len(genome))
 }
 
 func getLetters(n int) string {
@@ -75,30 +68,40 @@ func mutate(genome string) string {
 	dice := randInt(0, 100)
 
 	if dice%15 == 0 {
+		if *verbose {
+			fmt.Print("-")
+		}
 		return loss(genome)
 
 	} else if dice%10 == 0 {
-		return add(genome)
+		if *verbose {
+			fmt.Print("*")
+		}
+		return infect(genome)
 
 	} else {
-		return infect(genome)
+		return add(genome)
 	}
 }
 
-// add a virus of length rad to the genome
+// replace part of the genome with a virus
 func infect(genome string) string {
 	g := []byte(genome)
-	v := []byte(getLetters(3 * rad))
-	insertPos := randInt(0, len(genome)-len(v))
-	for i := 0; i < rad*3; i++ {
+	virusSize := randInt(1, 4)
+	v := []byte(getLetters(virusSize))
+	insertPos := randInt(0, len(genome)-virusSize)
+	for i := 0; i < virusSize; i++ {
 		g[insertPos+i] = v[i]
 	}
 	return string(g)
 }
 
-// add a single nucleotide
+// add some nucleotide
 func add(genome string) string {
-	return genome + getLetters(1)
+	if *verbose {
+		fmt.Print("+")
+	}
+	return genome + getLetters(randInt(1, 500))
 }
 
 // remove a single nucleotide
@@ -112,27 +115,14 @@ func translateGenome(genome string) string {
 	var protein string
 	// the RNA is read every 3 letters
 	for i := 0; i < len(genome)-3; i += 3 {
-		codon := genome[i : i+3]
-		protein = protein + translate(codon)
+		aa := translate(genome[i : i+3])
+		// stop codon is bad
+		if aa == "!" {
+			return protein
+		}
+		protein = protein + aa
 	}
 	return protein
-}
-
-// assess the quality of a protein
-func getScore(protein string) float64 {
-	score := 1.0
-
-	for _, a := range protein {
-		if a == 70 || a == 73 || a == 75 {
-			score += 2
-		}
-		// stop codon is bad
-		if a == 33 {
-			return 0
-		}
-	}
-
-	return score
 }
 
 func translate(codon string) string {
